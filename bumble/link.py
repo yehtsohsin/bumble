@@ -95,11 +95,21 @@ class LocalLink:
     def on_address_changed(self, controller):
         pass
 
-    def send_advertising_data(self, sender_address, data):
+    def send_advertising_data(self, sender_address, data, scan_response):
         # Send the advertising data to all controllers, except the sender
         for controller in self.controllers:
             if controller.random_address != sender_address:
-                controller.on_link_advertising_data(sender_address, data)
+                controller.on_link_advertising_data(sender_address, data, scan_response)
+
+    def send_extended_advertising_data(
+        self, sender_address, event_type, data, scan_response
+    ):
+        # Send the advertising data to all controllers, except the sender
+        for controller in self.controllers:
+            if controller.random_address != sender_address:
+                controller.on_link_extended_advertising_data(
+                    sender_address, event_type, data, scan_response
+                )
 
     def send_acl_data(self, sender_controller, destination_address, transport, data):
         # Send the data to the first controller with a matching address
@@ -173,8 +183,12 @@ class LocalLink:
             f'$$$ DISCONNECTION {central_address} -> '
             f'{peripheral_address}: reason = {disconnect_command.reason}'
         )
-        args = [central_address, peripheral_address, disconnect_command]
-        asyncio.get_running_loop().call_soon(self.on_disconnection_complete, *args)
+        asyncio.get_running_loop().call_soon(
+            self.on_disconnection_complete,
+            central_address,
+            peripheral_address,
+            disconnect_command,
+        )
 
     # pylint: disable=too-many-arguments
     def on_connection_encrypted(
@@ -384,7 +398,7 @@ class RemoteLink:
     async def on_advertisement_message_received(self, sender, advertisement):
         try:
             self.controller.on_link_advertising_data(
-                Address(sender), bytes.fromhex(advertisement)
+                Address(sender), bytes.fromhex(advertisement), b''
             )
         except Exception:
             logger.exception('exception')
@@ -471,7 +485,7 @@ class RemoteLink:
     async def send_advertising_data_to_relay(self, data):
         await self.send_targeted_message('*', f'advertisement:{data.hex()}')
 
-    def send_advertising_data(self, _, data):
+    def send_advertising_data(self, _, data, scan_response):
         self.execute(partial(self.send_advertising_data_to_relay, data))
 
     async def send_acl_data_to_relay(self, peer_address, data):

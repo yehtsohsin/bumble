@@ -22,6 +22,9 @@ import asyncio
 import itertools
 import random
 import struct
+import time
+from dataclasses import dataclass
+
 from bumble.colors import color
 from bumble.core import (
     BT_CENTRAL_ROLE,
@@ -35,15 +38,104 @@ from bumble.hci import (
     HCI_COMMAND_DISALLOWED_ERROR,
     HCI_COMMAND_PACKET,
     HCI_COMMAND_STATUS_PENDING,
+    HCI_CONNECTION_PARAMETERS_REQUEST_PROCEDURE_LE_SUPPORTED_FEATURE,
     HCI_CONNECTION_TIMEOUT_ERROR,
     HCI_CONTROLLER_BUSY_ERROR,
+    HCI_DISCONNECT_COMMAND,
     HCI_EVENT_PACKET,
+    HCI_EXTENDED_REJECT_INDICATION_LE_SUPPORTED_FEATURE,
+    HCI_LE_2M_PHY_LE_SUPPORTED_FEATURE,
+    HCI_LE_CLEAR_ADVERTISING_SETS_COMMAND,
+    HCI_LE_EXTENDED_ADVERTISING_LE_SUPPORTED_FEATURE,
+    HCI_HOST_BUFFER_SIZE_COMMAND,
+    HCI_HOST_NUMBER_OF_COMPLETED_PACKETS_COMMAND,
     HCI_INVALID_HCI_COMMAND_PARAMETERS_ERROR,
     HCI_LE_1M_PHY,
+    HCI_LE_ADD_DEVICE_TO_FILTER_ACCEPT_LIST_COMMAND,
+    HCI_LE_ADD_DEVICE_TO_RESOLVING_LIST_COMMAND,
+    HCI_LE_CLEAR_FILTER_ACCEPT_LIST_COMMAND,
+    HCI_LE_CLEAR_RESOLVING_LIST_COMMAND,
+    HCI_LE_CONNECTION_UPDATE_COMMAND,
+    HCI_LE_CREATE_CONNECTION_CANCEL_COMMAND,
+    HCI_LE_CREATE_CONNECTION_COMMAND,
+    HCI_LE_DATA_PACKET_LENGTH_EXTENSION_LE_SUPPORTED_FEATURE,
+    HCI_LE_ENABLE_ENCRYPTION_COMMAND,
+    HCI_LE_ENCRYPT_COMMAND,
+    HCI_LE_ENCRYPTION_LE_SUPPORTED_FEATURE,
+    HCI_LE_LONG_TERM_KEY_REQUEST_NEGATIVE_REPLY_COMMAND,
+    HCI_LE_LONG_TERM_KEY_REQUEST_REPLY_COMMAND,
+    HCI_LE_PING_LE_SUPPORTED_FEATURE,
+    HCI_LE_RAND_COMMAND,
+    HCI_LE_READ_ADVERTISING_PHYSICAL_CHANNEL_TX_POWER_COMMAND,
+    HCI_LE_READ_BUFFER_SIZE_COMMAND,
+    HCI_LE_READ_CHANNEL_MAP_COMMAND,
+    HCI_LE_READ_FILTER_ACCEPT_LIST_SIZE_COMMAND,
+    HCI_LE_READ_LOCAL_RESOLVABLE_ADDRESS_COMMAND,
+    HCI_LE_READ_LOCAL_SUPPORTED_FEATURES_COMMAND,
+    HCI_LE_READ_MAXIMUM_ADVERTISING_DATA_LENGTH_COMMAND,
+    HCI_LE_READ_MAXIMUM_DATA_LENGTH_COMMAND,
+    HCI_LE_READ_NUMBER_OF_SUPPORTED_ADVERTISING_SETS_COMMAND,
+    HCI_LE_READ_PEER_RESOLVABLE_ADDRESS_COMMAND,
+    HCI_LE_READ_PHY_COMMAND,
+    HCI_LE_READ_REMOTE_FEATURES_COMMAND,
+    HCI_LE_READ_RESOLVING_LIST_SIZE_COMMAND,
+    HCI_LE_READ_SUGGESTED_DEFAULT_DATA_LENGTH_COMMAND,
+    HCI_LE_READ_SUPPORTED_STATES_COMMAND,
+    HCI_LE_READ_TRANSMIT_POWER_COMMAND,
+    HCI_LE_RECEIVER_TEST_COMMAND,
+    HCI_LE_RECEIVER_TEST_V2_COMMAND,
+    HCI_LE_REMOTE_CONNECTION_PARAMETER_REQUEST_NEGATIVE_REPLY_COMMAND,
+    HCI_LE_REMOTE_CONNECTION_PARAMETER_REQUEST_REPLY_COMMAND,
+    HCI_LE_REMOVE_ADVERTISING_SET_COMMAND,
+    HCI_LE_REMOVE_DEVICE_FROM_FILTER_ACCEPT_LIST_COMMAND,
+    HCI_LE_REMOVE_DEVICE_FROM_RESOLVING_LIST_COMMAND,
+    HCI_LE_SET_ADDRESS_RESOLUTION_ENABLE_COMMAND,
+    HCI_LE_SET_ADVERTISING_DATA_COMMAND,
+    HCI_LE_SET_ADVERTISING_ENABLE_COMMAND,
+    HCI_LE_SET_ADVERTISING_PARAMETERS_COMMAND,
+    HCI_LE_SET_ADVERTISING_SET_RANDOM_ADDRESS_COMMAND,
+    HCI_LE_SET_DATA_LENGTH_COMMAND,
+    HCI_LE_SET_DEFAULT_PHY_COMMAND,
+    HCI_LE_SET_EVENT_MASK_COMMAND,
+    HCI_LE_SET_EXTENDED_ADVERTISING_DATA_COMMAND,
+    HCI_LE_SET_EXTENDED_ADVERTISING_ENABLE_COMMAND,
+    HCI_LE_SET_EXTENDED_ADVERTISING_PARAMETERS_COMMAND,
+    HCI_LE_SET_EXTENDED_SCAN_ENABLE_COMMAND,
+    HCI_LE_SET_EXTENDED_SCAN_PARAMETERS_COMMAND,
+    HCI_LE_SET_EXTENDED_SCAN_RESPONSE_DATA_COMMAND,
+    HCI_LE_SET_HOST_CHANNEL_CLASSIFICATION_COMMAND,
+    HCI_LE_SET_PHY_COMMAND,
+    HCI_LE_SET_PRIVACY_MODE_COMMAND,
+    HCI_LE_SET_RANDOM_ADDRESS_COMMAND,
+    HCI_LE_SET_RESOLVABLE_PRIVATE_ADDRESS_TIMEOUT_COMMAND,
+    HCI_LE_SET_SCAN_ENABLE_COMMAND,
+    HCI_LE_SET_SCAN_PARAMETERS_COMMAND,
+    HCI_LE_SET_SCAN_RESPONSE_DATA_COMMAND,
+    HCI_LE_TEST_END_COMMAND,
+    HCI_LE_TRANSMITTER_TEST_COMMAND,
+    HCI_LE_TRANSMITTER_TEST_V2_COMMAND,
+    HCI_LE_WRITE_SUGGESTED_DEFAULT_DATA_LENGTH_COMMAND,
+    HCI_LL_PRIVACY_LE_SUPPORTED_FEATURE,
+    HCI_PERIPHERAL_INITIATED_FEATURE_EXCHANGE_LE_SUPPORTED_FEATURE,
+    HCI_READ_AUTHENTICATED_PAYLOAD_TIMEOUT_COMMAND,
+    HCI_READ_BD_ADDR_COMMAND,
+    HCI_READ_LOCAL_SUPPORTED_FEATURES_COMMAND,
+    HCI_READ_LOCAL_VERSION_INFORMATION_COMMAND,
+    HCI_READ_REMOTE_VERSION_INFORMATION_COMMAND,
+    HCI_READ_RSSI_COMMAND,
+    HCI_READ_TRANSMIT_POWER_LEVEL_COMMAND,
+    HCI_RESET_COMMAND,
+    HCI_SET_CONTROLLER_TO_HOST_FLOW_CONTROL_COMMAND,
+    HCI_SET_EVENT_MASK_COMMAND,
+    HCI_SET_EVENT_MASK_PAGE_2_COMMAND,
     HCI_SUCCESS,
+    HCI_SUPPORTED_COMMANDS_FLAGS,
+    HCI_UNKNOWN_ADVERTISING_IDENTIFIER_ERROR,
     HCI_UNKNOWN_HCI_COMMAND_ERROR,
     HCI_REMOTE_USER_TERMINATED_CONNECTION_ERROR,
+    HCI_MEMORY_CAPACITY_EXCEEDED_ERROR,
     HCI_VERSION_BLUETOOTH_CORE_5_0,
+    HCI_WRITE_AUTHENTICATED_PAYLOAD_TIMEOUT_COMMAND,
     Address,
     HCI_AclDataPacket,
     HCI_AclDataPacketAssembler,
@@ -55,6 +147,7 @@ from bumble.hci import (
     HCI_Encryption_Change_Event,
     HCI_LE_Advertising_Report_Event,
     HCI_LE_Connection_Complete_Event,
+    HCI_LE_Extended_Advertising_Report_Event,
     HCI_LE_Read_Remote_Features_Complete_Event,
     HCI_Number_Of_Completed_Packets_Event,
     HCI_Packet,
@@ -76,6 +169,25 @@ logger = logging.getLogger(__name__)
 # -----------------------------------------------------------------------------
 class DataObject:
     pass
+
+
+# -----------------------------------------------------------------------------
+def le_supported_features_as_bytes(supported_features):
+    return struct.pack('<Q', sum((1 << bit for bit in supported_features)))
+
+
+# -----------------------------------------------------------------------------
+def supported_commands_as_bytes(supported_commands):
+    result = [0] * 64
+
+    for command in supported_commands:
+        for octet in range(64):
+            flags = HCI_SUPPORTED_COMMANDS_FLAGS[octet]
+            if command in flags:
+                result[octet] |= 1 << flags.index(command)
+                break
+
+    return bytes(result)
 
 
 # -----------------------------------------------------------------------------
@@ -103,6 +215,119 @@ class Connection:
 
 
 # -----------------------------------------------------------------------------
+@dataclass
+class Options:
+    extended_advertising: bool = False
+
+
+# -----------------------------------------------------------------------------
+class LegacyAdvertiser:
+    def __init__(self, parameters, address):
+        self.address = address
+        self.parameters = parameters
+        self.data = b''
+        self.scan_response_data = b''
+        self.enabled = False
+        self.next_advertising_time = 0  # When to advertise next
+
+    def schedule(self):
+        if self.parameters is None:
+            return
+        self.next_advertising_time = (
+            time.time() + self.parameters.advertising_interval_min / 625.0
+        )
+
+    def send_advertising_data(self, link):
+        if self.parameters is None or not self.enabled:
+            return
+
+        link.send_advertising_data(self.address, self.data, self.scan_response_data)
+        self.schedule()
+
+
+# -----------------------------------------------------------------------------
+class ExtendedAdvertiser:
+    def __init__(self, parameters, address):
+        self.parameters = parameters
+        self.address = address
+        self.data = b''
+        self.scan_response_data = b''
+        self.enabled = False
+        self.max_extended_advertising_events = 0
+        self.extended_advertising_events = 0
+        self.duration = 0
+        self.first_advertising_time = 0
+        self.next_advertising_time = 0  # When to advertise next
+
+    @property
+    def tx_power(self):
+        return (
+            0
+            if self.parameters.advertising_tx_power == 0x7F
+            else self.parameters.advertising_tx_power
+        )
+
+    @property
+    def is_connectable(self):
+        return self.parameters.advertising_event_properties & (1 << 0) != 0
+
+    @property
+    def is_scannable(self):
+        return self.parameters.advertising_event_properties & (1 << 1) != 0
+
+    @property
+    def is_directed(self):
+        return self.parameters.advertising_event_properties & (1 << 2) != 0
+
+    @property
+    def is_high_duty_cycle_directed(self):
+        return self.parameters.advertising_event_properties & (1 << 3) != 0
+
+    @property
+    def is_legacy(self):
+        return self.parameters.advertising_event_properties & (1 << 4) != 0
+
+    @property
+    def is_anonymous(self):
+        return self.parameters.advertising_event_properties & (1 << 5) != 0
+
+    def schedule(self):
+        self.next_advertising_time = (
+            time.time() + self.parameters.primary_advertising_interval_min / 625.0
+        )
+
+    def send_advertising_data(self, link):
+        if not self.enabled:
+            return
+
+        if (
+            self.max_extended_advertising_events > 0
+            and self.extended_advertising_events >= self.max_extended_advertising_events
+        ):
+            self.next_advertising_time = 0
+            return
+
+        now = time.time()
+        if self.extended_advertising_events == 0:
+            self.first_advertising_time = now
+
+        if self.duration:
+            elapsed = now - self.first_advertising_time
+            if elapsed > self.duration / 100.0:
+                self.next_advertising_time = 0
+                return
+
+        self.extended_advertising_events += 1
+        link.send_extended_advertising_data(
+            self.address,
+            self.parameters.advertising_event_properties,
+            self.data,
+            self.scan_response_data,
+        )
+        self.schedule()
+
+
+# -----------------------------------------------------------------------------
 class Controller:
     def __init__(
         self,
@@ -111,10 +336,12 @@ class Controller:
         host_sink: Optional[TransportSink] = None,
         link=None,
         public_address: Optional[Union[bytes, str, Address]] = None,
+        options: Optional[Options] = None,
     ):
         self.name = name
         self.hci_sink = None
         self.link = link
+        self.options = options or Options()
 
         self.central_connections: Dict[
             Address, Connection
@@ -138,13 +365,105 @@ class Controller:
         self.hc_total_num_le_data_packets = 64
         self.event_mask = 0
         self.event_mask_page_2 = 0
-        self.supported_commands = bytes.fromhex(
-            '2000800000c000000000e40000002822000000000000040000f7ffff7f000000'
-            '30f0f9ff01008004000000000000000000000000000000000000000000000000'
-        )
+        supported_commands = [
+            HCI_DISCONNECT_COMMAND,
+            HCI_READ_REMOTE_VERSION_INFORMATION_COMMAND,
+            HCI_SET_EVENT_MASK_COMMAND,
+            HCI_RESET_COMMAND,
+            HCI_READ_TRANSMIT_POWER_LEVEL_COMMAND,
+            HCI_SET_CONTROLLER_TO_HOST_FLOW_CONTROL_COMMAND,
+            HCI_HOST_BUFFER_SIZE_COMMAND,
+            HCI_HOST_NUMBER_OF_COMPLETED_PACKETS_COMMAND,
+            HCI_READ_LOCAL_VERSION_INFORMATION_COMMAND,
+            HCI_READ_LOCAL_SUPPORTED_FEATURES_COMMAND,
+            HCI_READ_BD_ADDR_COMMAND,
+            HCI_READ_RSSI_COMMAND,
+            HCI_SET_EVENT_MASK_PAGE_2_COMMAND,
+            HCI_LE_SET_EVENT_MASK_COMMAND,
+            HCI_LE_READ_BUFFER_SIZE_COMMAND,
+            HCI_LE_READ_LOCAL_SUPPORTED_FEATURES_COMMAND,
+            HCI_LE_SET_RANDOM_ADDRESS_COMMAND,
+            HCI_LE_SET_ADVERTISING_PARAMETERS_COMMAND,
+            HCI_LE_READ_ADVERTISING_PHYSICAL_CHANNEL_TX_POWER_COMMAND,
+            HCI_LE_SET_ADVERTISING_DATA_COMMAND,
+            HCI_LE_SET_SCAN_RESPONSE_DATA_COMMAND,
+            HCI_LE_SET_ADVERTISING_ENABLE_COMMAND,
+            HCI_LE_SET_SCAN_PARAMETERS_COMMAND,
+            HCI_LE_SET_SCAN_ENABLE_COMMAND,
+            HCI_LE_CREATE_CONNECTION_COMMAND,
+            HCI_LE_CREATE_CONNECTION_CANCEL_COMMAND,
+            HCI_LE_READ_FILTER_ACCEPT_LIST_SIZE_COMMAND,
+            HCI_LE_CLEAR_FILTER_ACCEPT_LIST_COMMAND,
+            HCI_LE_ADD_DEVICE_TO_FILTER_ACCEPT_LIST_COMMAND,
+            HCI_LE_REMOVE_DEVICE_FROM_FILTER_ACCEPT_LIST_COMMAND,
+            HCI_LE_CONNECTION_UPDATE_COMMAND,
+            HCI_LE_SET_HOST_CHANNEL_CLASSIFICATION_COMMAND,
+            HCI_LE_READ_CHANNEL_MAP_COMMAND,
+            HCI_LE_READ_REMOTE_FEATURES_COMMAND,
+            HCI_LE_ENCRYPT_COMMAND,
+            HCI_LE_RAND_COMMAND,
+            HCI_LE_ENABLE_ENCRYPTION_COMMAND,
+            HCI_LE_LONG_TERM_KEY_REQUEST_REPLY_COMMAND,
+            HCI_LE_LONG_TERM_KEY_REQUEST_NEGATIVE_REPLY_COMMAND,
+            HCI_LE_READ_SUPPORTED_STATES_COMMAND,
+            HCI_LE_RECEIVER_TEST_COMMAND,
+            HCI_LE_TRANSMITTER_TEST_COMMAND,
+            HCI_LE_TEST_END_COMMAND,
+            HCI_READ_AUTHENTICATED_PAYLOAD_TIMEOUT_COMMAND,
+            HCI_WRITE_AUTHENTICATED_PAYLOAD_TIMEOUT_COMMAND,
+            HCI_LE_REMOTE_CONNECTION_PARAMETER_REQUEST_REPLY_COMMAND,
+            HCI_LE_REMOTE_CONNECTION_PARAMETER_REQUEST_NEGATIVE_REPLY_COMMAND,
+            HCI_LE_SET_DATA_LENGTH_COMMAND,
+            HCI_LE_READ_SUGGESTED_DEFAULT_DATA_LENGTH_COMMAND,
+            HCI_LE_WRITE_SUGGESTED_DEFAULT_DATA_LENGTH_COMMAND,
+            HCI_LE_ADD_DEVICE_TO_RESOLVING_LIST_COMMAND,
+            HCI_LE_REMOVE_DEVICE_FROM_RESOLVING_LIST_COMMAND,
+            HCI_LE_CLEAR_RESOLVING_LIST_COMMAND,
+            HCI_LE_READ_RESOLVING_LIST_SIZE_COMMAND,
+            HCI_LE_READ_PEER_RESOLVABLE_ADDRESS_COMMAND,
+            HCI_LE_READ_LOCAL_RESOLVABLE_ADDRESS_COMMAND,
+            HCI_LE_SET_ADDRESS_RESOLUTION_ENABLE_COMMAND,
+            HCI_LE_SET_RESOLVABLE_PRIVATE_ADDRESS_TIMEOUT_COMMAND,
+            HCI_LE_READ_MAXIMUM_DATA_LENGTH_COMMAND,
+            HCI_LE_READ_PHY_COMMAND,
+            HCI_LE_SET_DEFAULT_PHY_COMMAND,
+            HCI_LE_SET_PHY_COMMAND,
+            HCI_LE_RECEIVER_TEST_V2_COMMAND,
+            HCI_LE_TRANSMITTER_TEST_V2_COMMAND,
+            HCI_LE_READ_TRANSMIT_POWER_COMMAND,
+            HCI_LE_SET_PRIVACY_MODE_COMMAND,
+        ]
+        if self.options.extended_advertising:
+            supported_commands.extend(
+                [
+                    HCI_LE_SET_ADVERTISING_SET_RANDOM_ADDRESS_COMMAND,
+                    HCI_LE_SET_EXTENDED_ADVERTISING_PARAMETERS_COMMAND,
+                    HCI_LE_SET_EXTENDED_ADVERTISING_DATA_COMMAND,
+                    HCI_LE_SET_EXTENDED_SCAN_RESPONSE_DATA_COMMAND,
+                    HCI_LE_SET_EXTENDED_ADVERTISING_ENABLE_COMMAND,
+                    HCI_LE_READ_MAXIMUM_ADVERTISING_DATA_LENGTH_COMMAND,
+                    HCI_LE_READ_NUMBER_OF_SUPPORTED_ADVERTISING_SETS_COMMAND,
+                    HCI_LE_REMOVE_ADVERTISING_SET_COMMAND,
+                    HCI_LE_CLEAR_ADVERTISING_SETS_COMMAND,
+                    HCI_LE_SET_EXTENDED_SCAN_PARAMETERS_COMMAND,
+                    HCI_LE_SET_EXTENDED_SCAN_ENABLE_COMMAND,
+                ]
+            )
+        self.supported_commands = supported_commands_as_bytes(supported_commands)
         self.le_event_mask = 0
-        self.advertising_parameters = None
-        self.le_features = bytes.fromhex('ff49010000000000')
+        le_features = [
+            HCI_LE_ENCRYPTION_LE_SUPPORTED_FEATURE,
+            HCI_CONNECTION_PARAMETERS_REQUEST_PROCEDURE_LE_SUPPORTED_FEATURE,
+            HCI_EXTENDED_REJECT_INDICATION_LE_SUPPORTED_FEATURE,
+            HCI_PERIPHERAL_INITIATED_FEATURE_EXCHANGE_LE_SUPPORTED_FEATURE,
+            HCI_LE_PING_LE_SUPPORTED_FEATURE,
+            HCI_LE_DATA_PACKET_LENGTH_EXTENSION_LE_SUPPORTED_FEATURE,
+            HCI_LL_PRIVACY_LE_SUPPORTED_FEATURE,
+            HCI_LE_2M_PHY_LE_SUPPORTED_FEATURE,
+        ]
+        if self.options.extended_advertising:
+            le_features.append(HCI_LE_EXTENDED_ADVERTISING_LE_SUPPORTED_FEATURE)
+        self.le_features = le_supported_features_as_bytes(le_features)
         self.le_states = bytes.fromhex('ffff3fffff030000')
         self.advertising_channel_tx_power = 0
         self.filter_accept_list_size = 8
@@ -163,15 +482,12 @@ class Controller:
         self.le_scan_enable = 0
         self.le_scan_own_address_type = Address.RANDOM_DEVICE_ADDRESS
         self.le_scanning_filter_policy = 0
-        self.le_scan_response_data = None
         self.le_address_resolution = False
         self.le_rpa_timeout = 0
+        self.le_maximum_advertising_data_length = 0x0672
+        self.le_number_of_supported_advertising_sets = 64
         self.sync_flow_control = False
         self.local_name = 'Bumble'
-
-        self.advertising_interval = 2000  # Fixed for now
-        self.advertising_data = None
-        self.advertising_timer_handle = None
 
         self._random_address = Address('00:00:00:00:00:00')
         if isinstance(public_address, Address):
@@ -182,6 +498,10 @@ class Controller:
             )
         else:
             self._public_address = Address('00:00:00:00:00:00')
+
+        self.advertising_timer_handle = None
+        self.legacy_advertiser = LegacyAdvertiser(None, self.random_address)
+        self.extended_advertisers: Dict[int, Exception] = {}  # Advertisers, by handle
 
         # Set the source and sink interfaces
         if host_source:
@@ -511,12 +831,12 @@ class Controller:
         acl_packet = HCI_AclDataPacket(connection.handle, 2, 0, len(data), data)
         self.send_hci_packet(acl_packet)
 
-    def on_link_advertising_data(self, sender_address, data):
+    def on_link_advertising_data(self, sender_address, data, scan_response):
         # Ignore if we're not scanning
         if self.le_scan_enable == 0:
             return
 
-        # Send a scan report
+        # Send an advertising report
         report = HCI_LE_Advertising_Report_Event.Report(
             HCI_LE_Advertising_Report_Event.Report.FIELDS,
             event_type=HCI_LE_Advertising_Report_Event.ADV_IND,
@@ -533,10 +853,61 @@ class Controller:
             event_type=HCI_LE_Advertising_Report_Event.SCAN_RSP,
             address_type=sender_address.address_type,
             address=sender_address,
-            data=data,
+            data=scan_response,
             rssi=-50,
         )
         self.send_hci_packet(HCI_LE_Advertising_Report_Event([report]))
+
+    def on_link_extended_advertising_data(
+        self, sender_address, event_properties, data, scan_response
+    ):
+        # Ignore if we're not scanning
+        if self.le_scan_enable == 0:
+            return
+
+        # Send an advertising report
+        event_type = (
+            1 << HCI_LE_Extended_Advertising_Report_Event.CONNECTABLE_ADVERTISING
+        )
+        report = HCI_LE_Extended_Advertising_Report_Event.Report(
+            HCI_LE_Extended_Advertising_Report_Event.Report.FIELDS,
+            event_type=event_type,
+            address_type=sender_address.address_type,
+            address=sender_address,
+            primary_phy=HCI_LE_1M_PHY,
+            secondary_phy=HCI_LE_1M_PHY,
+            advertising_sid=0,
+            tx_power=0,
+            rssi=-50,
+            periodic_advertising_interval=0,
+            direct_address_type=0,
+            direct_address=Address.NIL,
+            data=data,
+        )
+        self.send_hci_packet(HCI_LE_Extended_Advertising_Report_Event([report]))
+
+        # Simulate a scan response if needed
+        if event_properties & (1 << 1) == 0:
+            # The event is not scannable
+            return
+
+        event_type |= 1 << HCI_LE_Extended_Advertising_Report_Event.SCAN_RESPONSE
+        report = HCI_LE_Extended_Advertising_Report_Event.Report(
+            HCI_LE_Extended_Advertising_Report_Event.Report.FIELDS,
+            event_type=event_type,
+            address_type=sender_address.address_type,
+            address=sender_address,
+            primary_phy=HCI_LE_1M_PHY,
+            secondary_phy=HCI_LE_1M_PHY,
+            advertising_sid=0,
+            tx_power=0,
+            rssi=-50,
+            periodic_advertising_interval=0,
+            direct_address_type=0,
+            direct_address=Address.NIL,
+            data=scan_response,
+        )
+        self.send_hci_packet(HCI_LE_Extended_Advertising_Report_Event([report]))
 
     ############################################################
     # Classic link connections
@@ -623,32 +994,42 @@ class Controller:
     # Advertising support
     ############################################################
     def on_advertising_timer_fired(self):
+        self.advertising_timer_handle = None
+
         self.send_advertising_data()
-        self.advertising_timer_handle = asyncio.get_running_loop().call_later(
-            self.advertising_interval / 1000.0, self.on_advertising_timer_fired
+
+        # Compute the time of the next advertisement
+        next_advertisement = min(
+            (
+                advertiser.next_advertising_time
+                for advertiser in itertools.chain(
+                    (self.legacy_advertiser,), self.extended_advertisers.values()
+                )
+                if advertiser.enabled
+            ),
+            default=0,
         )
 
-    def start_advertising(self):
-        # Stop any ongoing advertising before we start again
-        self.stop_advertising()
+        if next_advertisement:
+            # We have at least one advertiser
+            delay = max(next_advertisement - time.time(), 0)
+            self.advertising_timer_handle = asyncio.get_running_loop().call_later(
+                delay, self.on_advertising_timer_fired
+            )
 
-        # Advertise now
-        self.advertising_timer_handle = asyncio.get_running_loop().call_soon(
-            self.on_advertising_timer_fired
-        )
-
-    def stop_advertising(self):
-        if self.advertising_timer_handle is not None:
-            self.advertising_timer_handle.cancel()
-            self.advertising_timer_handle = None
+    def start_advertising_timer(self):
+        if self.advertising_timer_handle is None:
+            self.advertising_timer_handle = asyncio.get_running_loop().call_soon(
+                self.on_advertising_timer_fired
+            )
 
     def send_advertising_data(self):
-        if self.link and self.advertising_data:
-            self.link.send_advertising_data(self.random_address, self.advertising_data)
+        # Legacy advertising
+        self.legacy_advertiser.send_advertising_data(self.link)
 
-    @property
-    def is_advertising(self):
-        return self.advertising_timer_handle is not None
+        # Extended advertising
+        for advertiser in self.extended_advertisers.values():
+            advertiser.send_advertising_data(self.link)
 
     ############################################################
     # HCI handlers
@@ -925,6 +1306,12 @@ class Controller:
         )
         return bytes([HCI_SUCCESS]) + bd_addr
 
+    def on_hci_read_local_extended_features_command(self, _command):
+        '''
+        See Bluetooth spec @ 7.4.4 Read Local Extended Features Command
+        '''
+        return bytes([HCI_SUCCESS]) + bytes(8)
+
     def on_hci_le_set_event_mask_command(self, command):
         '''
         See Bluetooth spec Vol 4, Part E - 7.8.1 LE Set Event Mask Command
@@ -961,7 +1348,7 @@ class Controller:
         '''
         See Bluetooth spec Vol 4, Part E - 7.8.5 LE Set Advertising Parameters Command
         '''
-        self.advertising_parameters = command
+        self.legacy_advertiser.parameters = command
         return bytes([HCI_SUCCESS])
 
     def on_hci_le_read_advertising_physical_channel_tx_power_command(self, _command):
@@ -975,14 +1362,14 @@ class Controller:
         '''
         See Bluetooth spec Vol 4, Part E - 7.8.7 LE Set Advertising Data Command
         '''
-        self.advertising_data = command.advertising_data
+        self.legacy_advertiser.data = command.advertising_data
         return bytes([HCI_SUCCESS])
 
     def on_hci_le_set_scan_response_data_command(self, command):
         '''
         See Bluetooth spec Vol 4, Part E - 7.8.8 LE Set Scan Response Data Command
         '''
-        self.le_scan_response_data = command.scan_response_data
+        self.legacy_advertiser.scan_response_data = command.scan_response_data
         return bytes([HCI_SUCCESS])
 
     def on_hci_le_set_advertising_enable_command(self, command):
@@ -990,9 +1377,10 @@ class Controller:
         See Bluetooth spec Vol 4, Part E - 7.8.9 LE Set Advertising Enable Command
         '''
         if command.advertising_enable:
-            self.start_advertising()
+            self.legacy_advertiser.enabled = True
+            self.start_advertising_timer()
         else:
-            self.stop_advertising()
+            self.legacy_advertiser.enabled = True
 
         return bytes([HCI_SUCCESS])
 
@@ -1253,6 +1641,190 @@ class Controller:
             'tx_phys': command.tx_phys,
             'rx_phys': command.rx_phys,
         }
+        return bytes([HCI_SUCCESS])
+
+    def on_hci_le_set_advertising_set_random_address_command(self, command):
+        '''
+        See Bluetooth spec Vol 2, Part E - 7.8.52 LE Set Advertising Set Random Address
+        Command
+        '''
+        if (
+            advertiser := self.extended_advertisers.get(
+                command.advertising_handle, None
+            )
+        ) is None:
+            return bytes([HCI_UNKNOWN_ADVERTISING_IDENTIFIER_ERROR])
+
+        if advertiser.enabled and advertiser.is_connectable:
+            return bytes([HCI_COMMAND_DISALLOWED_ERROR])
+
+        advertiser.address = command.random_address
+
+        return bytes([HCI_SUCCESS])
+
+    def on_hci_le_set_extended_advertising_parameters_command(self, command):
+        '''
+        See Bluetooth spec Vol 2, Part E - 7.8.53 LE Set Extended Advertising Parameters
+        Command
+        '''
+        # Check if the advertiser already exists
+        if advertiser := self.extended_advertisers.get(
+            command.advertising_handle, None
+        ):
+            # We cannot update an advertiser that's currently enabled
+            if advertiser.enabled:
+                return bytes([HCI_COMMAND_DISALLOWED_ERROR, 0])
+
+            # Update the advertiser
+            advertiser.parameters = command
+        else:
+            # Try to create a new advertiser
+            if (
+                len(self.extended_advertisers)
+                >= self.le_number_of_supported_advertising_sets
+            ):
+                logger.warning('too many advertisers')
+                return bytes([HCI_MEMORY_CAPACITY_EXCEEDED_ERROR, 0])
+
+            logger.debug(f'new advertiser: {command.advertising_handle}')
+            # TODO: allow other addresses
+            advertiser = ExtendedAdvertiser(command, self.random_address)
+            self.extended_advertisers[command.advertising_handle] = advertiser
+
+        return bytes([HCI_SUCCESS, advertiser.tx_power])
+
+    def on_hci_le_set_extended_advertising_data_command(self, command):
+        '''
+        See Bluetooth spec Vol 2, Part E - 7.8.54 LE Set Extended Advertising Data
+        Command
+        '''
+        if (
+            advertiser := self.extended_advertisers.get(
+                command.advertising_handle, None
+            )
+        ) is None:
+            return bytes([HCI_UNKNOWN_ADVERTISING_IDENTIFIER_ERROR])
+
+        if command.operation not in (3, 4) and not command.advertising_data:
+            return bytes([HCI_INVALID_HCI_COMMAND_PARAMETERS_ERROR])
+
+        if advertiser.enabled and command.operation not in (3, 4):
+            return bytes([HCI_COMMAND_DISALLOWED_ERROR])
+
+        updated_data = None
+        if command.operation == 0:
+            # Intermediate fragment of fragmented extended advertising data
+            updated_data = advertiser.data + command.advertising_data
+        elif command.operation == 1:
+            # First fragment of fragmented extended advertising data
+            updated_data = command.advertising_data
+        elif command.operation == 2:
+            # Last fragment of fragmented extended advertising data
+            updated_data = advertiser.data + command.advertising_data
+        elif command.operation == 3:
+            # Complete extended advertising data
+            updated_data = command.advertising_data
+        elif command.operation == 4:
+            # Unchanged data (just update the Advertising DID)
+            if (
+                not advertiser.enabled
+                or not advertiser.data
+                or advertiser.is_legacy
+                or command.advertising_data
+            ):
+                return bytes([HCI_INVALID_HCI_COMMAND_PARAMETERS_ERROR])
+        else:
+            return bytes([HCI_INVALID_HCI_COMMAND_PARAMETERS_ERROR])
+
+        if updated_data is not None:
+            if len(updated_data) > self.le_maximum_advertising_data_length:
+                return bytes([HCI_INVALID_HCI_COMMAND_PARAMETERS_ERROR])
+            advertiser.data = updated_data
+            logger.debug(f'updating advertiser data: {updated_data.hex()}')
+
+        return bytes([HCI_SUCCESS])
+
+    def on_hci_le_set_extended_scan_response_data_command(self, _command):
+        '''
+        See Bluetooth spec Vol 2, Part E - 7.8.55 LE Set Extended Scan Response Data
+        Command
+        '''
+        # TODO: not implemented yet
+        return bytes([HCI_SUCCESS])
+
+    def on_hci_le_set_extended_advertising_enable_command(self, command):
+        '''
+        See Bluetooth spec Vol 2, Part E - 7.8.56 LE Set Extended Advertising Enable
+        Command
+        '''
+        for advertising_handle in command.advertising_handles:
+            if (
+                advertiser := self.extended_advertisers.get(advertising_handle, None)
+            ) is None:
+                return bytes([HCI_UNKNOWN_ADVERTISING_IDENTIFIER_ERROR])
+
+        for i, advertising_handle in enumerate(command.advertising_handles):
+            advertiser = self.extended_advertisers[advertising_handle]
+            if command.enable:
+                advertiser.enabled = True
+                advertiser.duration = command.durations[i]
+                advertiser.max_extended_advertising_events = (
+                    command.max_extended_advertising_events[i]
+                )
+                self.start_advertising_timer()
+            else:
+                advertiser.enabled = False
+
+        return bytes([HCI_SUCCESS])
+
+    def on_hci_le_read_maximum_advertising_data_length_command(self, _command):
+        '''
+        See Bluetooth spec Vol 2, Part E - 7.8.57 LE Read Maximum Advertising Data
+        Length Command
+        '''
+        return struct.pack('<BH', HCI_SUCCESS, self.le_maximum_advertising_data_length)
+
+    def on_hci_le_read_number_of_supported_advertising_sets_command(self, _command):
+        '''
+        See Bluetooth spec Vol 2, Part E - 7.8.58 LE Read Number Of Supported
+        Advertising Sets Command
+        '''
+        return struct.pack(
+            'BB', HCI_SUCCESS, self.le_number_of_supported_advertising_sets
+        )
+
+    def on_hci_le_remove_advertising_set_command(self, command):
+        '''
+        See Bluetooth spec Vol 2, Part E - 7.8.59 LE Remove Advertising Set Command
+        '''
+        if command.advertising_handle not in self.extended_advertisers:
+            return bytes([HCI_UNKNOWN_ADVERTISING_IDENTIFIER_ERROR])
+
+        del self.extended_advertisers[command.advertising_handle]
+        return bytes([HCI_SUCCESS])
+
+    def on_hci_le_clear_advertising_sets_command(self, _command):
+        '''
+        See Bluetooth spec Vol 2, Part E - 7.8.60 LE Clear Advertising Sets Command
+        '''
+        self.extended_advertisers = {}
+        return bytes([HCI_SUCCESS])
+
+    def on_hci_le_set_extended_scan_parameters_command(self, _command):
+        '''
+        See Bluetooth spec Vol 2, Part E - 7.8.64 LE Set Extended Scan Parameters
+        Command
+        '''
+        # TODO: not implemented yet
+        return bytes([HCI_SUCCESS])
+
+    def on_hci_le_set_extended_scan_enable_command(self, command):
+        '''
+        See Bluetooth spec Vol 2, Part E - 7.8.65 LE Set Extended Scan Enable Command
+        '''
+        self.le_scan_enable = command.enable
+        self.filter_duplicates = command.filter_duplicates
+        # TODO: support period and duration
         return bytes([HCI_SUCCESS])
 
     def on_hci_le_read_transmit_power_command(self, _command):
