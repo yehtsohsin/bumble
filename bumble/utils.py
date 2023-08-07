@@ -16,12 +16,14 @@
 # Imports
 # -----------------------------------------------------------------------------
 import asyncio
-import logging
-import traceback
 import collections
+import enum
+import functools
+import logging
 import sys
+import traceback
 from typing import Awaitable, Set, TypeVar
-from functools import wraps
+
 from pyee import EventEmitter
 
 from .colors import color
@@ -167,7 +169,7 @@ class AsyncRunner:
         """
 
         def decorator(func):
-            @wraps(func)
+            @functools.wraps(func)
             def wrapper(*args, **kwargs):
                 coroutine = func(*args, **kwargs)
                 if queue is None:
@@ -302,3 +304,16 @@ class FlowControlAsyncPipe:
                     self.resume_source()
 
             self.check_pump()
+
+
+# -----------------------------------------------------------------------------
+class OpenIntEnum(enum.IntEnum):
+    @classmethod
+    def _missing_(cls, value):
+        if not isinstance(value, int):
+            return None
+
+        obj = int.__new__(cls, value)
+        obj._value_ = value
+        obj._name_ = f"{cls.__name__}[0x{value:X}]"
+        return obj

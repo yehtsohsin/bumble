@@ -39,6 +39,8 @@ from .hci import (
 from .rfcomm import RFCOMM_Frame, RFCOMM_PSM
 from .sdp import SDP_PDU, SDP_PSM
 from .avdtp import MessageAssembler as AVDTP_MessageAssembler, AVDTP_PSM
+from .avctp import AVCTP_PSM
+
 
 # -----------------------------------------------------------------------------
 # Logging
@@ -50,7 +52,8 @@ logger = logging.getLogger(__name__)
 PSM_NAMES = {
     RFCOMM_PSM: 'RFCOMM',
     SDP_PSM: 'SDP',
-    AVDTP_PSM: 'AVDTP'
+    AVDTP_PSM: 'AVDTP',
+    AVCTP_PSM: 'AVCTP'
     # TODO: add more PSM values
 }
 
