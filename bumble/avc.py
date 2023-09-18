@@ -18,7 +18,7 @@
 from __future__ import annotations
 import enum
 import struct
-from typing import Dict, Type, Union
+from typing import Dict, Type, Union, Tuple
 
 from bumble.utils import OpenIntEnum
 
@@ -141,13 +141,23 @@ class Frame:
             # Command
             ctype = CommandFrame.CommandType(ctype_or_response)
             if c_subclass := CommandFrame.subclasses.get(opcode):
-                return c_subclass(ctype, subunit_type, subunit_id, opcode, operands)
+                return c_subclass(
+                    ctype,
+                    subunit_type,
+                    subunit_id,
+                    *c_subclass.parse_operands(operands),
+                )
             return CommandFrame(ctype, subunit_type, subunit_id, opcode, operands)
         else:
             # Response
             response = ResponseFrame.ResponseCode(ctype_or_response)
             if r_subclass := ResponseFrame.subclasses.get(opcode):
-                return r_subclass(response, subunit_type, subunit_id, opcode, operands)
+                return r_subclass(
+                    response,
+                    subunit_type,
+                    subunit_id,
+                    *r_subclass.parse_operands(operands),
+                )
             return ResponseFrame(response, subunit_type, subunit_id, opcode, operands)
 
     def to_bytes(
@@ -174,9 +184,6 @@ class Frame:
             f"opcode={self.opcode.name}, "
             f"operands={self.operands.hex()})"
         )
-
-    def init_from_operands(self):
-        pass
 
     def __init__(
         self,
@@ -258,15 +265,28 @@ class ResponseFrame(Frame):
 
 
 # -----------------------------------------------------------------------------
-@Frame.subclass
-class VendorDependentCommandFrame(CommandFrame):
+class VendorDependentFrame:
     company_id: int
     vendor_dependent_data: bytes
 
-    def init_from_operands(self):
-        self.company_id = struct.unpack(">I", b"\x00" + self.operands[:3])[0]
-        self.vendor_dependent_data = self.operands[3:]
+    @staticmethod
+    def parse_operands(operands: bytes) -> Tuple:
+        return (
+            struct.unpack(">I", b"\x00" + operands[:3])[0],
+            operands[3:],
+        )
 
+    def make_operands(self) -> bytes:
+        return struct.pack(">I", self.company_id)[1:] + self.vendor_dependent_data
+
+    def __init__(self, company_id: int, vendor_dependent_data: bytes):
+        self.company_id = company_id
+        self.vendor_dependent_data = vendor_dependent_data
+
+
+# -----------------------------------------------------------------------------
+@Frame.subclass
+class VendorDependentCommandFrame(VendorDependentFrame, CommandFrame):
     def __init__(
         self,
         ctype: CommandFrame.CommandType,
@@ -275,37 +295,29 @@ class VendorDependentCommandFrame(CommandFrame):
         company_id: int,
         vendor_dependent_data: bytes,
     ) -> None:
-        operands = struct.pack(">I", company_id)[1:] + vendor_dependent_data
-        super().__init__(
+        VendorDependentFrame.__init__(self, company_id, vendor_dependent_data)
+        CommandFrame.__init__(
+            self,
             ctype,
             subunit_type,
             subunit_id,
             Frame.OperationCode.VENDOR_DEPENDENT,
-            operands,
+            self.make_operands(),
         )
-        self.company_id = company_id
-        self.vendor_dependent_data = vendor_dependent_data
 
     def __str__(self):
         return (
             f"VendorDependentCommandFrame(ctype={self.ctype.name}, "
             f"subunit_type={self.subunit_type.name}, "
             f"subunit_id=0x{self.subunit_id:02X}, "
-            f"company_id=0x{self.company_id:04X}, "
+            f"company_id=0x{self.company_id:06X}, "
             f"vendor_dependent_data={self.vendor_dependent_data.hex()})"
         )
 
 
 # -----------------------------------------------------------------------------
 @Frame.subclass
-class VendorDependentResponseFrame(ResponseFrame):
-    company_id: int
-    vendor_dependent_data: bytes
-
-    def init_from_operands(self):
-        self.company_id = struct.unpack(">I", b"\x00" + self.operands[:3])[0]
-        self.vendor_dependent_data = self.operands[3:]
-
+class VendorDependentResponseFrame(VendorDependentFrame, ResponseFrame):
     def __init__(
         self,
         response: ResponseFrame.ResponseCode,
@@ -314,23 +326,22 @@ class VendorDependentResponseFrame(ResponseFrame):
         company_id: int,
         vendor_dependent_data: bytes,
     ) -> None:
-        operands = struct.pack(">I", company_id)[1:] + vendor_dependent_data
-        super().__init__(
+        VendorDependentFrame.__init__(self, company_id, vendor_dependent_data)
+        ResponseFrame.__init__(
+            self,
             response,
             subunit_type,
             subunit_id,
             Frame.OperationCode.VENDOR_DEPENDENT,
-            operands,
+            self.make_operands(),
         )
-        self.company_id = company_id
-        self.vendor_dependent_data = vendor_dependent_data
 
     def __str__(self):
         return (
-            f"VendorDependentCommandFrame(response={self.response.name}, "
+            f"VendorDependentResponseFrame(response={self.response.name}, "
             f"subunit_type={self.subunit_type.name}, "
             f"subunit_id=0x{self.subunit_id:02X}, "
-            f"company_id=0x{self.company_id:04X}, "
+            f"company_id=0x{self.company_id:06X}, "
             f"vendor_dependent_data={self.vendor_dependent_data.hex()})"
         )
 
@@ -408,10 +419,13 @@ class PassThroughFrame:
     operation_id: OperationId
     operation_data: bytes
 
-    def init_from_operands(self):
-        self.state_flag = self.StateFlag(self.operands[0] >> 7)
-        self.operation_id = self.OperationId(self.operands[0] & 0x7F)
-        self.operation_data = self.operands[1 : 1 + self.operands[1]]
+    @staticmethod
+    def parse_operands(operands: bytes) -> Tuple:
+        return (
+            PassThroughFrame.StateFlag(operands[0] >> 7),
+            PassThroughFrame.OperationId(operands[0] & 0x7F),
+            operands[1 : 1 + operands[1]],
+        )
 
     def make_operands(self):
         return (

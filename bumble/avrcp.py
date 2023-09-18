@@ -27,7 +27,6 @@ from bumble.sdp import (
     SDP_BROWSE_GROUP_LIST_ATTRIBUTE_ID,
     SDP_PUBLIC_BROWSE_ROOT,
     SDP_PROTOCOL_DESCRIPTOR_LIST_ATTRIBUTE_ID,
-    SDP_ADDITIONAL_PROTOCOL_DESCRIPTOR_LIST_ATTRIBUTE_ID,
     SDP_SERVICE_CLASS_ID_LIST_ATTRIBUTE_ID,
     SDP_BLUETOOTH_PROFILE_DESCRIPTOR_LIST_ATTRIBUTE_ID,
     SDP_SUPPORTED_FEATURES_ATTRIBUTE_ID,
@@ -35,14 +34,13 @@ from bumble.sdp import (
     ServiceAttribute,
 )
 from bumble.core import (
-    UUID,
     BT_L2CAP_PROTOCOL_ID,
     BT_AVCTP_PROTOCOL_ID,
     BT_AV_REMOTE_CONTROL_SERVICE,
     BT_AV_REMOTE_CONTROL_CONTROLLER_SERVICE,
     BT_AV_REMOTE_CONTROL_TARGET_SERVICE,
 )
-from bumble.avctp import AVCTP_PSM, AVCTP_BROWSING_PSM
+from bumble.avctp import AVCTP_PSM
 
 
 # -----------------------------------------------------------------------------
@@ -58,9 +56,8 @@ AVRCP_PID = 0x110E
 
 
 # -----------------------------------------------------------------------------
-def make_common_sdp_records(
+def make_controller_service_sdp_records(
     service_record_handle: int,
-    service_class_uuid: UUID,
     avctp_version: Tuple[int, int] = (1, 4),
     avrcp_version: Tuple[int, int] = (1, 6),
     supported_features: int = 1,
@@ -83,7 +80,7 @@ def make_common_sdp_records(
             DataElement.sequence(
                 [
                     DataElement.uuid(BT_AV_REMOTE_CONTROL_SERVICE),
-                    DataElement.uuid(service_class_uuid),
+                    DataElement.uuid(BT_AV_REMOTE_CONTROL_CONTROLLER_SERVICE),
                 ]
             ),
         ),
@@ -110,8 +107,12 @@ def make_common_sdp_records(
             SDP_BLUETOOTH_PROFILE_DESCRIPTOR_LIST_ATTRIBUTE_ID,
             DataElement.sequence(
                 [
-                    DataElement.uuid(BT_AV_REMOTE_CONTROL_SERVICE),
-                    DataElement.unsigned_integer_16(avrcp_version_int),
+                    DataElement.sequence(
+                        [
+                            DataElement.uuid(BT_AV_REMOTE_CONTROL_SERVICE),
+                            DataElement.unsigned_integer_16(avrcp_version_int),
+                        ]
+                    ),
                 ]
             ),
         ),
@@ -123,45 +124,41 @@ def make_common_sdp_records(
 
 
 # -----------------------------------------------------------------------------
-def make_controller_service_sdp_records(
-    service_record_handle: int,
-    avctp_version: Tuple[int, int] = (1, 4),
-    avrcp_version: Tuple[int, int] = (1, 6),
-    supported_features: int = 1,
-) -> List[ServiceAttribute]:
-    return make_common_sdp_records(
-        service_record_handle,
-        BT_AV_REMOTE_CONTROL_CONTROLLER_SERVICE,
-        avctp_version,
-        avrcp_version,
-        supported_features,
-    )
-
-
-# -----------------------------------------------------------------------------
 def make_target_service_sdp_records(
     service_record_handle: int,
     avctp_version: Tuple[int, int] = (1, 4),
     avrcp_version: Tuple[int, int] = (1, 6),
-    supported_features: int = 1,
+    supported_features: int = 0x23,
 ) -> List[ServiceAttribute]:
+    # TODO: support a way to compute the supported features from a feature list
     avctp_version_int = avctp_version[0] << 8 | avctp_version[1]
-    common_sdp_records = make_common_sdp_records(
-        service_record_handle,
-        BT_AV_REMOTE_CONTROL_TARGET_SERVICE,
-        avctp_version,
-        avrcp_version,
-        supported_features,
-    )
-    additional_protocol_descriptors = [
+    avrcp_version_int = avrcp_version[0] << 8 | avrcp_version[1]
+
+    return [
         ServiceAttribute(
-            SDP_ADDITIONAL_PROTOCOL_DESCRIPTOR_LIST_ATTRIBUTE_ID,
+            SDP_SERVICE_RECORD_HANDLE_ATTRIBUTE_ID,
+            DataElement.unsigned_integer_32(service_record_handle),
+        ),
+        ServiceAttribute(
+            SDP_BROWSE_GROUP_LIST_ATTRIBUTE_ID,
+            DataElement.sequence([DataElement.uuid(SDP_PUBLIC_BROWSE_ROOT)]),
+        ),
+        ServiceAttribute(
+            SDP_SERVICE_CLASS_ID_LIST_ATTRIBUTE_ID,
+            DataElement.sequence(
+                [
+                    DataElement.uuid(BT_AV_REMOTE_CONTROL_TARGET_SERVICE),
+                ]
+            ),
+        ),
+        ServiceAttribute(
+            SDP_PROTOCOL_DESCRIPTOR_LIST_ATTRIBUTE_ID,
             DataElement.sequence(
                 [
                     DataElement.sequence(
                         [
                             DataElement.uuid(BT_L2CAP_PROTOCOL_ID),
-                            DataElement.unsigned_integer_16(AVCTP_BROWSING_PSM),
+                            DataElement.unsigned_integer_16(AVCTP_PSM),
                         ]
                     ),
                     DataElement.sequence(
@@ -173,27 +170,24 @@ def make_target_service_sdp_records(
                 ]
             ),
         ),
+        ServiceAttribute(
+            SDP_BLUETOOTH_PROFILE_DESCRIPTOR_LIST_ATTRIBUTE_ID,
+            DataElement.sequence(
+                [
+                    DataElement.sequence(
+                        [
+                            DataElement.uuid(BT_AV_REMOTE_CONTROL_SERVICE),
+                            DataElement.unsigned_integer_16(avrcp_version_int),
+                        ]
+                    ),
+                ]
+            ),
+        ),
+        ServiceAttribute(
+            SDP_SUPPORTED_FEATURES_ATTRIBUTE_ID,
+            DataElement.unsigned_integer_16(supported_features),
+        ),
     ]
-    return (
-        common_sdp_records[:3]
-        + additional_protocol_descriptors
-        + common_sdp_records[3:]
-    )
-
-
-# SERVICE:
-#   Attribute(id=SDP_SERVICE_RECORD_HANDLE_ATTRIBUTE_ID,value=UNSIGNED_INTEGER(65542#4))
-#   Attribute(id=SDP_SERVICE_CLASS_ID_LIST_ATTRIBUTE_ID,value=SEQUENCE([UUID(UUID-16:110E (A/V_RemoteControl)),UUID(UUID-16:110F (A/V_RemoteControlController))]))
-#   Attribute(id=SDP_PROTOCOL_DESCRIPTOR_LIST_ATTRIBUTE_ID,value=SEQUENCE([SEQUENCE([UUID(UUID-16:0100 (L2CAP)),UNSIGNED_INTEGER(23#2)]),SEQUENCE([UUID(UUID-16:0017 (AVCTP)),UNSIGNED_INTEGER(260#2)])]))
-#   Attribute(id=SDP_BLUETOOTH_PROFILE_DESCRIPTOR_LIST_ATTRIBUTE_ID,value=SEQUENCE([SEQUENCE([UUID(UUID-16:110E (A/V_RemoteControl)),UNSIGNED_INTEGER(262#2)])]))
-#   Attribute(id=[0x311],value=UNSIGNED_INTEGER(1#2))
-# SERVICE:
-#   Attribute(id=SDP_SERVICE_RECORD_HANDLE_ATTRIBUTE_ID,value=UNSIGNED_INTEGER(65544#4))
-#   Attribute(id=SDP_SERVICE_CLASS_ID_LIST_ATTRIBUTE_ID,value=SEQUENCE([UUID(UUID-16:110C (A/V_RemoteControlTarget))]))
-#   Attribute(id=SDP_PROTOCOL_DESCRIPTOR_LIST_ATTRIBUTE_ID,           value=SEQUENCE([SEQUENCE([UUID(UUID-16:0100 (L2CAP)),UNSIGNED_INTEGER(23#2)]),SEQUENCE([UUID(UUID-16:0017 (AVCTP)),UNSIGNED_INTEGER(260#2)])]))
-#   Attribute(id=SDP_ADDITIONAL_PROTOCOL_DESCRIPTOR_LIST_ATTRIBUTE_ID,value=SEQUENCE([SEQUENCE([UUID(UUID-16:0100 (L2CAP)),UNSIGNED_INTEGER(27#2)]),SEQUENCE([UUID(UUID-16:0017 (AVCTP)),UNSIGNED_INTEGER(260#2)])]))
-#   Attribute(id=SDP_BLUETOOTH_PROFILE_DESCRIPTOR_LIST_ATTRIBUTE_ID,value=SEQUENCE([SEQUENCE([UUID(UUID-16:110E (A/V_RemoteControl)),UNSIGNED_INTEGER(262#2)])]))
-#   Attribute(id=[0x311],value=UNSIGNED_INTEGER(35#2))
 
 
 # -----------------------------------------------------------------------------

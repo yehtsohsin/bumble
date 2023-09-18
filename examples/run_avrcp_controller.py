@@ -37,11 +37,15 @@ logger = logging.getLogger(__name__)
 def sdp_records():
     a2dp_sink_service_record_handle = 0x00010001
     avrcp_controller_service_record_handle = 0x00010002
+    avrcp_target_service_record_handle = 0x00010003
     return {
         a2dp_sink_service_record_handle: a2dp.make_audio_sink_service_sdp_records(
             a2dp_sink_service_record_handle
         ),
         avrcp_controller_service_record_handle: avrcp.make_controller_service_sdp_records(
+            avrcp_controller_service_record_handle
+        ),
+        avrcp_target_service_record_handle: avrcp.make_target_service_sdp_records(
             avrcp_controller_service_record_handle
         ),
     }

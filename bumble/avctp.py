@@ -40,6 +40,7 @@ AVCTP_BROWSING_PSM = 0x001B
 # -----------------------------------------------------------------------------
 class MessageAssembler:
     Callback = Callable[[int, bool, bool, int, bytes], None]
+
     transaction_label: int
     pid: int
     c_r: int
