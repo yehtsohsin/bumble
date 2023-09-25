@@ -38,6 +38,7 @@ def sdp_records():
     a2dp_sink_service_record_handle = 0x00010001
     avrcp_controller_service_record_handle = 0x00010002
     avrcp_target_service_record_handle = 0x00010003
+    # pylint: disable=line-too-long
     return {
         a2dp_sink_service_record_handle: a2dp.make_audio_sink_service_sdp_records(
             a2dp_sink_service_record_handle
@@ -91,37 +92,37 @@ def on_rtp_packet(packet):
 # -----------------------------------------------------------------------------
 def on_avctp_connection(l2cap_channel: l2cap.Channel) -> None:
     logger.debug(f'+++ new L2CAP connection: {l2cap_channel}')
-    l2cap_channel.on('open', lambda: on_avctp_channel_open(l2cap_channel))
+    _ = avrcp.Protocol(l2cap_channel)
+    #l2cap_channel.on('open', lambda: on_avctp_channel_open(l2cap_channel))
 
 
-def on_avctp_channel_open(l2cap_channel: l2cap.Channel) -> None:
-    logger.debug(f'$$$ AVCTP channel open: {l2cap_channel}')
+# def on_avctp_channel_open(l2cap_channel: l2cap.Channel) -> None:
+#     logger.debug(f'$$$ AVCTP channel open: {l2cap_channel}')
 
-    l2cap_channel.on('open', on_avctp_channel_open)
-    l2cap_channel.on('close', on_avctp_channel_close)
-    avctp_protocol = avctp.Protocol(l2cap_channel)
-    avctp_protocol.register_command_handler(avrcp.AVRCP_PID, on_avctp_command)
-    avctp_protocol.register_response_handler(avrcp.AVRCP_PID, on_avctp_response)
+#     l2cap_channel.on('close', on_avctp_channel_close)
+#     avctp_protocol = avctp.Protocol(l2cap_channel)
+#     avctp_protocol.register_command_handler(avrcp.AVRCP_PID, on_avctp_command)
+#     avctp_protocol.register_response_handler(avrcp.AVRCP_PID, on_avctp_response)
 
-    play_pressed = avc.PassThroughCommandFrame(
-        avc.CommandFrame.CommandType.CONTROL,
-        avc.CommandFrame.SubunitType.PANEL,
-        0,
-        avc.PassThroughCommandFrame.StateFlag.PRESSED,
-        avc.PassThroughCommandFrame.OperationId.PLAY,
-        b'',
-    )
-    avctp_protocol.send_command(1, avrcp.AVRCP_PID, bytes(play_pressed))
+#     play_pressed = avc.PassThroughCommandFrame(
+#         avc.CommandFrame.CommandType.CONTROL,
+#         avc.CommandFrame.SubunitType.PANEL,
+#         0,
+#         avc.PassThroughCommandFrame.StateFlag.PRESSED,
+#         avc.PassThroughCommandFrame.OperationId.PLAY,
+#         b'',
+#     )
+#     avctp_protocol.send_command(1, avrcp.AVRCP_PID, bytes(play_pressed))
 
-    play_released = avc.PassThroughCommandFrame(
-        avc.CommandFrame.CommandType.CONTROL,
-        avc.CommandFrame.SubunitType.PANEL,
-        0,
-        avc.PassThroughCommandFrame.StateFlag.RELEASED,
-        avc.PassThroughCommandFrame.OperationId.PLAY,
-        b'',
-    )
-    avctp_protocol.send_command(1, avrcp.AVRCP_PID, bytes(play_released))
+#     play_released = avc.PassThroughCommandFrame(
+#         avc.CommandFrame.CommandType.CONTROL,
+#         avc.CommandFrame.SubunitType.PANEL,
+#         0,
+#         avc.PassThroughCommandFrame.StateFlag.RELEASED,
+#         avc.PassThroughCommandFrame.OperationId.PLAY,
+#         b'',
+#     )
+#     avctp_protocol.send_command(2, avrcp.AVRCP_PID, bytes(play_released))
 
 
 def on_avctp_channel_close():

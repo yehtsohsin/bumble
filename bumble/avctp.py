@@ -22,6 +22,7 @@ import struct
 from typing import Callable, Dict, Optional
 
 from bumble.colors import color
+from bumble import avc
 from bumble import l2cap
 
 # -----------------------------------------------------------------------------
@@ -204,7 +205,11 @@ class Protocol:
 
         # Invoke the handler.
         # By convention, for an ipid, send a None payload to the response handler.
-        handlers[pid](transaction_label, payload if not ipid else None)
+        if ipid:
+            frame = None
+        else:
+            frame = avc.Frame.from_bytes(payload)
+        handlers[pid](transaction_label, frame)
 
     def send_message(
         self,
