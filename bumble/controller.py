@@ -133,6 +133,7 @@ from bumble.hci import (
     HCI_UNKNOWN_ADVERTISING_IDENTIFIER_ERROR,
     HCI_UNKNOWN_HCI_COMMAND_ERROR,
     HCI_REMOTE_USER_TERMINATED_CONNECTION_ERROR,
+    HCI_CONNECTION_TERMINATED_BY_LOCAL_HOST_ERROR,
     HCI_MEMORY_CAPACITY_EXCEEDED_ERROR,
     HCI_VERSION_BLUETOOTH_CORE_5_0,
     HCI_WRITE_AUTHENTICATED_PAYLOAD_TIMEOUT_COMMAND,
@@ -143,6 +144,7 @@ from bumble.hci import (
     HCI_Command_Status_Event,
     HCI_Connection_Complete_Event,
     HCI_Connection_Request_Event,
+    HCI_Constant,
     HCI_Disconnection_Complete_Event,
     HCI_Encryption_Change_Event,
     HCI_LE_Advertising_Report_Event,
@@ -208,10 +210,16 @@ class Connection:
         )
 
     def on_acl_pdu(self, data):
-        if self.link:
-            self.link.send_acl_data(
-                self.controller, self.peer_address, self.transport, data
-            )
+        self.link.send_acl_data(
+            self.controller, self.peer_address, self.transport, data
+        )
+
+    def __str__(self):
+        return (
+            f'Connection[{HCI_Constant.role_name(self.role)}]'
+            f'({self.controller.random_address} -> '
+            f'{self.peer_address})'
+        )
 
 
 # -----------------------------------------------------------------------------
@@ -343,15 +351,8 @@ class Controller:
         self.link = link
         self.options = options or Options()
 
-        self.central_connections: Dict[
-            Address, Connection
-        ] = {}  # Connections where this controller is the central
-        self.peripheral_connections: Dict[
-            Address, Connection
-        ] = {}  # Connections where this controller is the peripheral
-        self.classic_connections: Dict[
-            Address, Connection
-        ] = {}  # Connections in BR/EDR
+        self.le_connections: Dict[Address, Connection] = {}  # BLE Connections
+        self.classic_connections: Dict[Address, Connection] = {}  # BR/EDR Connections
 
         self.hci_version = HCI_VERSION_BLUETOOTH_CORE_5_0
         self.hci_revision = 0
@@ -555,8 +556,7 @@ class Controller:
         self._random_address = address
         logger.debug(f'new random address: {address}')
 
-        if self.link:
-            self.link.on_address_changed(self)
+        self.link.on_address_changed(self)
 
     # Packet Sink protocol (packets coming from the host via HCI)
     def on_packet(self, packet):
@@ -625,8 +625,7 @@ class Controller:
         handle = 0
         max_handle = 0
         for connection in itertools.chain(
-            self.central_connections.values(),
-            self.peripheral_connections.values(),
+            self.le_connections.values(),
             self.classic_connections.values(),
         ):
             max_handle = max(max_handle, connection.handle)
@@ -636,25 +635,22 @@ class Controller:
         return handle
 
     def find_le_connection_by_address(self, address):
-        return self.central_connections.get(address) or self.peripheral_connections.get(
-            address
-        )
+        return self.le_connections.get(address)
 
     def find_classic_connection_by_address(self, address):
         return self.classic_connections.get(address)
 
     def find_connection_by_handle(self, handle):
         for connection in itertools.chain(
-            self.central_connections.values(),
-            self.peripheral_connections.values(),
+            self.le_connections.values(),
             self.classic_connections.values(),
         ):
             if connection.handle == handle:
                 return connection
         return None
 
-    def find_central_connection_by_handle(self, handle):
-        for connection in self.central_connections.values():
+    def find_le_connection_by_handle(self, handle):
+        for connection in self.le_connections.values():
             if connection.handle == handle:
                 return connection
         return None
@@ -673,7 +669,7 @@ class Controller:
         # Allocate (or reuse) a connection handle
         peer_address = central_address
         peer_address_type = central_address.address_type
-        connection = self.peripheral_connections.get(peer_address)
+        connection = self.le_connections.get(peer_address)
         if connection is None:
             connection_handle = self.allocate_connection_handle()
             connection = Connection(
@@ -684,7 +680,7 @@ class Controller:
                 self.link,
                 BT_LE_TRANSPORT,
             )
-            self.peripheral_connections[peer_address] = connection
+            self.le_connections[peer_address] = connection
             logger.debug(f'New PERIPHERAL connection handle: 0x{connection_handle:04X}')
 
         # Then say that the connection has completed
@@ -702,13 +698,13 @@ class Controller:
             )
         )
 
-    def on_link_central_disconnected(self, peer_address, reason):
+    def on_link_peer_disconnected(self, peer_address, reason):
         '''
         Called when an active disconnection occurs from a peer
         '''
 
         # Send a disconnection complete event
-        if connection := self.peripheral_connections.get(peer_address):
+        if connection := self.le_connections.get(peer_address):
             self.send_hci_packet(
                 HCI_Disconnection_Complete_Event(
                     status=HCI_SUCCESS,
@@ -718,8 +714,11 @@ class Controller:
             )
 
             # Remove the connection
-            del self.peripheral_connections[peer_address]
+            logger.debug(f'PEER connection removed: {connection}')
+            del self.le_connections[peer_address]
         else:
+            for address in self.le_connections:
+                print(str(address), str(self.le_connections[address]))
             logger.warning(f'!!! No peripheral connection found for {peer_address}')
 
     def on_link_peripheral_connection_complete(
@@ -732,7 +731,7 @@ class Controller:
         if status == HCI_SUCCESS:
             # Allocate (or reuse) a connection handle
             peer_address = le_create_connection_command.peer_address
-            connection = self.central_connections.get(peer_address)
+            connection = self.le_connections.get(peer_address)
             if connection is None:
                 connection_handle = self.allocate_connection_handle()
                 connection = Connection(
@@ -743,7 +742,7 @@ class Controller:
                     self.link,
                     BT_LE_TRANSPORT,
                 )
-                self.central_connections[peer_address] = connection
+                self.le_connections[peer_address] = connection
                 logger.debug(
                     f'New CENTRAL connection handle: 0x{connection_handle:04X}'
                 )
@@ -766,9 +765,9 @@ class Controller:
             )
         )
 
-    def on_link_peripheral_disconnection_complete(self, disconnection_command, status):
+    def on_link_initiated_disconnection_complete(self, disconnection_command, status):
         '''
-        Called when a disconnection has been completed
+        Called when a disconnection that we initiated has been completed
         '''
 
         # Send a disconnection complete event
@@ -776,24 +775,24 @@ class Controller:
             HCI_Disconnection_Complete_Event(
                 status=status,
                 connection_handle=disconnection_command.connection_handle,
-                reason=disconnection_command.reason,
+                reason=HCI_CONNECTION_TERMINATED_BY_LOCAL_HOST_ERROR,
             )
         )
 
         # Remove the connection
-        if connection := self.find_central_connection_by_handle(
+        if connection := self.find_le_connection_by_handle(
             disconnection_command.connection_handle
         ):
-            logger.debug(f'CENTRAL Connection removed: {connection}')
-            del self.central_connections[connection.peer_address]
+            logger.debug(f'INITIATOR connection removed: {connection}')
+            del self.le_connections[connection.peer_address]
 
-    def on_link_peripheral_disconnected(self, peer_address):
+    def on_link_connection_lost(self, peer_address):
         '''
-        Called when a connection to a peripheral is broken
+        Called when a connection to a peer is broken
         '''
 
         # Send a disconnection complete event
-        if connection := self.central_connections.get(peer_address):
+        if connection := self.le_connections.get(peer_address):
             self.send_hci_packet(
                 HCI_Disconnection_Complete_Event(
                     status=HCI_SUCCESS,
@@ -803,7 +802,8 @@ class Controller:
             )
 
             # Remove the connection
-            del self.central_connections[peer_address]
+            logger.debug(f'PEER connection lost: {connection}')
+            del self.le_connections[peer_address]
         else:
             logger.warning(f'!!! No central connection found for {peer_address}')
 
@@ -1043,8 +1043,6 @@ class Controller:
         See Bluetooth spec Vol 4, Part E - 7.1.5 Create Connection command
         '''
 
-        if self.link is None:
-            return
         logger.debug(f'Connection request to {command.bd_addr}')
 
         # Check that we don't already have a pending connection
@@ -1084,32 +1082,20 @@ class Controller:
 
         # Notify the link of the disconnection
         handle = command.connection_handle
-        if connection := self.find_central_connection_by_handle(handle):
-            if self.link:
-                self.link.disconnect(
-                    self.random_address, connection.peer_address, command
-                )
-            else:
-                # Remove the connection
-                del self.central_connections[connection.peer_address]
+        if connection := self.find_le_connection_by_handle(handle):
+            self.link.disconnect(self.random_address, connection.peer_address, command)
         elif connection := self.find_classic_connection_by_handle(handle):
-            if self.link:
-                self.link.classic_disconnect(
-                    self,
-                    connection.peer_address,
-                    HCI_REMOTE_USER_TERMINATED_CONNECTION_ERROR,
-                )
-            else:
-                # Remove the connection
-                del self.classic_connections[connection.peer_address]
+            self.link.classic_disconnect(
+                self,
+                connection.peer_address,
+                HCI_REMOTE_USER_TERMINATED_CONNECTION_ERROR,
+            )
 
     def on_hci_accept_connection_request_command(self, command):
         '''
         See Bluetooth spec Vol 4, Part E - 7.1.8 Accept Connection Request command
         '''
 
-        if self.link is None:
-            return
         self.send_hci_packet(
             HCI_Command_Status_Event(
                 status=HCI_SUCCESS,
@@ -1124,8 +1110,6 @@ class Controller:
         See Bluetooth spec Vol 4, Part E - 7.2.8 Switch Role command
         '''
 
-        if self.link is None:
-            return
         self.send_hci_packet(
             HCI_Command_Status_Event(
                 status=HCI_SUCCESS,
@@ -1505,9 +1489,7 @@ class Controller:
 
         # Check the parameters
         if not (
-            connection := self.find_central_connection_by_handle(
-                command.connection_handle
-            )
+            connection := self.find_le_connection_by_handle(command.connection_handle)
         ):
             logger.warning('connection not found')
             return bytes([HCI_INVALID_HCI_COMMAND_PARAMETERS_ERROR])

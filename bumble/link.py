@@ -161,32 +161,32 @@ class LocalLink:
         asyncio.get_running_loop().call_soon(self.on_connection_complete)
 
     def on_disconnection_complete(
-        self, central_address, peripheral_address, disconnect_command
+        self, initiator_address, peer_address, disconnect_command
     ):
         # Find the controller that initiated the disconnection
-        if not (central_controller := self.find_controller(central_address)):
+        if not (initiator_controller := self.find_controller(initiator_address)):
             logger.warning('!!! Initiating controller not found')
             return
 
         # Disconnect from the first controller with a matching address
-        if peripheral_controller := self.find_controller(peripheral_address):
-            peripheral_controller.on_link_central_disconnected(
-                central_address, disconnect_command.reason
+        if peer_controller := self.find_controller(peer_address):
+            peer_controller.on_link_peer_disconnected(
+                initiator_address, disconnect_command.reason
             )
 
-        central_controller.on_link_peripheral_disconnection_complete(
+        initiator_controller.on_link_initiated_disconnection_complete(
             disconnect_command, HCI_SUCCESS
         )
 
-    def disconnect(self, central_address, peripheral_address, disconnect_command):
+    def disconnect(self, initiator_address, peer_address, disconnect_command):
         logger.debug(
-            f'$$$ DISCONNECTION {central_address} -> '
-            f'{peripheral_address}: reason = {disconnect_command.reason}'
+            f'$$$ DISCONNECTION {initiator_address} -> '
+            f'{peer_address}: reason = {disconnect_command.reason}'
         )
         asyncio.get_running_loop().call_soon(
             self.on_disconnection_complete,
-            central_address,
-            peripheral_address,
+            initiator_address,
+            peer_address,
             disconnect_command,
         )
 
@@ -374,11 +374,11 @@ class RemoteLink:
 
     async def on_left_received(self, address):
         if address in self.central_connections:
-            self.controller.on_link_peripheral_disconnected(Address(address))
+            self.controller.on_link_connection_lost(Address(address))
             self.central_connections.remove(address)
 
         if address in self.peripheral_connections:
-            self.controller.on_link_central_disconnected(
+            self.controller.on_link_peer_disconnected(
                 address, HCI_CONNECTION_TIMEOUT_ERROR
             )
             self.peripheral_connections.remove(address)
@@ -438,7 +438,7 @@ class RemoteLink:
         # Notify the controller
         params = parse_parameters(message)
         reason = int(params.get('reason', str(HCI_CONNECTION_TIMEOUT_ERROR)))
-        self.controller.on_link_central_disconnected(Address(sender), reason)
+        self.controller.on_link_peer_disconnected(Address(sender), reason)
 
         # Forget the connection
         if sender in self.peripheral_connections:
