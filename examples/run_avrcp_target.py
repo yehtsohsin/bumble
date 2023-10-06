@@ -140,7 +140,7 @@ def on_avctp_channel_close():
 
 
 def on_avctp_command(transaction_label, command):
-    print(f">>> AVCTP Command, transaction_label={transaction_label}: {command.hex()}")
+    print(f"<<< AVCTP Command, transaction_label={transaction_label}: {command.hex()}")
     frame = avc.Frame.from_bytes(command)
     print(frame)
 

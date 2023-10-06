@@ -72,8 +72,8 @@ class MessageAssembler:
         c_r = (pdu[0] >> 1) & 1
         ipid = pdu[0] & 1
 
-        if c_r != 0 and ipid != 0:
-            logger.warning("invalid IPID")
+        if c_r == 0 and ipid != 0:
+            logger.warning("invalid IPID in command frame")
             self.reset()
             return
 
@@ -184,7 +184,7 @@ class Protocol:
         payload: bytes,
     ) -> None:
         logger.debug(
-            f"<<< AVCTP message: pid={pid}, "
+            f"<<< AVCTP Message: pid={pid}, "
             f"transaction_label={transaction_label}, "
             f"is_command={is_command}, "
             f"ipid={ipid}, "
@@ -235,12 +235,29 @@ class Protocol:
         self.l2cap_channel.send_pdu(pdu)
 
     def send_command(self, transaction_label: int, pid: int, payload: bytes):
-        self.send_message(transaction_label, False, False, pid, payload)
-
-    def send_response(self, transaction_label: int, pid: int, payload: bytes):
+        logger.debug(
+            ">>> AVCTP command: "
+            f"transaction_label={transaction_label}, "
+            f"pid={pid}, "
+            f"payload={payload.hex()}"
+        )
         self.send_message(transaction_label, True, False, pid, payload)
 
+    def send_response(self, transaction_label: int, pid: int, payload: bytes):
+        logger.debug(
+            ">>> AVCTP response: "
+            f"transaction_label={transaction_label}, "
+            f"pid={pid}, "
+            f"payload={payload.hex()}"
+        )
+        self.send_message(transaction_label, False, False, pid, payload)
+
     def send_ipid(self, transaction_label: int, pid: int) -> None:
+        logger.debug(
+            ">>> AVCTP ipid: "
+            f"transaction_label={transaction_label}, "
+            f"pid={pid}"
+        )
         self.send_message(transaction_label, False, True, pid, b'')
 
     def register_handler(
