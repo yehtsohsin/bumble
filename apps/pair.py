@@ -27,7 +27,7 @@ from bumble.transport import open_transport_or_link
 from bumble.pairing import PairingDelegate, PairingConfig
 from bumble.smp import error_name as smp_error_name
 from bumble.keys import JsonKeyStore
-from bumble.core import ProtocolError
+from bumble.core import ProtocolError, BT_LE_TRANSPORT, BT_BR_EDR_TRANSPORT
 from bumble.gatt import (
     GATT_DEVICE_NAME_CHARACTERISTIC,
     GATT_GENERIC_ACCESS_SERVICE,
@@ -352,7 +352,10 @@ async def pair(
         device.on('connection', lambda connection: on_connection(connection, request))
         if address_or_name is not None:
             print(color(f'=== Connecting to {address_or_name}...', 'green'))
-            connection = await device.connect(address_or_name)
+            connection = await device.connect(
+                address_or_name,
+                transport=(BT_LE_TRANSPORT if mode == 'le' else BT_BR_EDR_TRANSPORT),
+            )
 
             if not request:
                 try:
